@@ -70,7 +70,9 @@ class BaseManager(object):
         'IncludeInEmails',
         'SentToContact',
         'CanApplyToRevenue',
-        'IsReconciled'
+        'IsReconciled',
+        'EnablePaymentsToAccount',
+        'ShowInExpenseClaims'
     )
     DECIMAL_FIELDS = (
         'Hours',
