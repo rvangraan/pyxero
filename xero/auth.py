@@ -1,7 +1,6 @@
 from __future__ import unicode_literals
 
 import datetime
-import aiohttp
 
 from oauthlib.oauth1 import (
     SIGNATURE_RSA, SIGNATURE_TYPE_AUTH_HEADER, SIGNATURE_HMAC
@@ -17,10 +16,9 @@ from .exceptions import (
     XeroInternalError, XeroNotAvailable, XeroNotFound, XeroNotImplemented,
     XeroNotVerified, XeroRateLimitExceeded, XeroUnauthorized
 )
-from asyncinit import asyncinit
 
 
-OAUTH_EXPIRY_SECONDS = 3600 # Default unless a response reports differently
+OAUTH_EXPIRY_SECONDS = 3600  # Default unless a response reports differently
 
 
 class PrivateCredentials(object):
