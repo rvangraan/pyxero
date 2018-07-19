@@ -12,20 +12,24 @@ from xero.exceptions import (
 )
 
 from . import mock_data
+from asynctest import patch
+from asyncio import get_event_loop
 
 
 class ExceptionsTest(unittest.TestCase):
+    def setUp(self):
+        self.loop = get_event_loop()
 
-    @patch('requests.put')
-    def test_bad_request(self, r_put):
+    @patch('xero.basemanager.make_authed_request')
+    def test_bad_request(self, make_authed_request):
         "Data with validation errors raises a bad request exception"
         # Verified response from the live API
         head = dict()
         head['content-type'] = 'text/xml; charset=utf-8'
-        r_put.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=400,
             encoding='utf-8',
-            text=mock_data.bad_request_text,
+            data=mock_data.bad_request_text,
             headers=head
         )
 
@@ -33,19 +37,21 @@ class ExceptionsTest(unittest.TestCase):
         xero = Xero(credentials)
 
         try:
-            xero.invoices.put({
-                'Type': 'ACCREC',
-                'LineAmountTypes': 'Exclusive',
-                'Date': date(2013, 4, 29),
-                'DueDate': date(2013, 4, 29),
-                'Reference': 'Order # 123456',
-                'Status': 'PAID',
-                'AmountPaid': '19.05',
-                'TotalTax': '1.05',
-                'AmountDue': '0.00',
-                'Total': '19.05',
-                'SubTotal': '18.00',
-            })
+            self.loop.run_until_complete(
+                xero.invoices.put({
+                    'Type': 'ACCREC',
+                    'LineAmountTypes': 'Exclusive',
+                    'Date': date(2013, 4, 29),
+                    'DueDate': date(2013, 4, 29),
+                    'Reference': 'Order # 123456',
+                    'Status': 'PAID',
+                    'AmountPaid': '19.05',
+                    'TotalTax': '1.05',
+                    'AmountDue': '0.00',
+                    'Total': '19.05',
+                    'SubTotal': '18.00',
+                })
+            )
             self.fail("Should raise a XeroBadRequest.")
 
         except XeroBadRequest as e:
@@ -63,15 +69,15 @@ class ExceptionsTest(unittest.TestCase):
         except Exception as e:
             self.fail("Should raise a XeroBadRequest, not %s" % e)
 
-    @patch('requests.get')
-    def test_unregistered_app(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_unregistered_app(self, make_authed_request):
         "An app without a signature raises a BadRequest exception, but with HTML payload"
         # Verified response from the live API
         head = dict()
         head['content-type'] = 'text/html; charset=utf-8'
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=400,
-            text='oauth_problem=signature_method_rejected&oauth_problem_advice=No%20certificates%20have%20been%20registered%20for%20the%20consumer',
+            data='oauth_problem=signature_method_rejected&oauth_problem_advice=No%20certificates%20have%20been%20registered%20for%20the%20consumer',
             headers=head
         )
 
@@ -79,7 +85,9 @@ class ExceptionsTest(unittest.TestCase):
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroUnauthorized.")
 
         except XeroBadRequest as e:
@@ -89,25 +97,27 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 400)
-            self.assertEqual(e.response.text, 'oauth_problem=signature_method_rejected&oauth_problem_advice=No%20certificates%20have%20been%20registered%20for%20the%20consumer')
+            self.assertEqual(e.response.data, 'oauth_problem=signature_method_rejected&oauth_problem_advice=No%20certificates%20have%20been%20registered%20for%20the%20consumer')
 
         except Exception as e:
             self.fail("Should raise a XeroBadRequest, not %s" % e)
 
-    @patch('requests.get')
-    def test_unauthorized_invalid(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_unauthorized_invalid(self, make_authed_request):
         "A session with an invalid token raises an unauthorized exception"
         # Verified response from the live API
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=401,
-            text='oauth_problem=signature_invalid&oauth_problem_advice=Failed%20to%20validate%20signature'
+            data='oauth_problem=signature_invalid&oauth_problem_advice=Failed%20to%20validate%20signature'
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroUnauthorized.")
 
         except XeroUnauthorized as e:
@@ -117,24 +127,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 401)
-            self.assertEqual(e.response.text, 'oauth_problem=signature_invalid&oauth_problem_advice=Failed%20to%20validate%20signature')
+            self.assertEqual(e.response.data, 'oauth_problem=signature_invalid&oauth_problem_advice=Failed%20to%20validate%20signature')
         except Exception as e:
             self.fail("Should raise a XeroUnauthorized, not %s" % e)
 
-    @patch('requests.get')
-    def test_unauthorized_expired(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_unauthorized_expired(self, make_authed_request):
         "A session with an expired token raises an unauthorized exception"
         # Verified response from the live API
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=401,
-            text="oauth_problem=token_expired&oauth_problem_advice=The%20access%20token%20has%20expired"
+            data="oauth_problem=token_expired&oauth_problem_advice=The%20access%20token%20has%20expired"
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroUnauthorized.")
 
         except XeroUnauthorized as e:
@@ -144,24 +156,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 401)
-            self.assertEqual(e.response.text, 'oauth_problem=token_expired&oauth_problem_advice=The%20access%20token%20has%20expired')
+            self.assertEqual(e.response.data, 'oauth_problem=token_expired&oauth_problem_advice=The%20access%20token%20has%20expired')
         except Exception as e:
             self.fail("Should raise a XeroUnauthorized, not %s" % e)
 
-    @patch('requests.get')
-    def test_forbidden(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_forbidden(self, make_authed_request):
         "In case of an SSL failure, a Forbidden exception is raised"
         # This is unconfirmed; haven't been able to verify this response from API.
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=403,
-            text="The client SSL certificate was not valid."
+            data="The client SSL certificate was not valid."
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroForbidden.")
 
         except XeroForbidden as e:
@@ -170,24 +184,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 403)
-            self.assertEqual(e.response.text, "The client SSL certificate was not valid.")
+            self.assertEqual(e.response.data, "The client SSL certificate was not valid.")
         except Exception as e:
             self.fail("Should raise a XeroForbidden, not %s" % e)
 
-    @patch('requests.get')
-    def test_not_found(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_not_found(self, make_authed_request):
         "If you request an object that doesn't exist, a Not Found exception is raised"
         # Verified response from the live API
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=404,
-            text="The resource you're looking for cannot be found"
+            data="The resource you're looking for cannot be found"
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.get(id='deadbeef')
+            self.loop.run_until_complete(
+                xero.contacts.get(id='deadbeef')
+            )
             self.fail("Should raise a XeroNotFound.")
 
         except XeroNotFound as e:
@@ -196,24 +212,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 404)
-            self.assertEqual(e.response.text, "The resource you're looking for cannot be found")
+            self.assertEqual(e.response.data, "The resource you're looking for cannot be found")
         except Exception as e:
             self.fail("Should raise a XeroNotFound, not %s" % e)
 
-    @patch('requests.get')
-    def test_internal_error(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_internal_error(self, make_authed_request):
         "In case of an SSL failure, a Forbidden exception is raised"
         # This is unconfirmed; haven't been able to verify this response from API.
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=500,
-            text='An unhandled error with the Xero API occurred. Contact the Xero API team if problems persist.'
+            data='An unhandled error with the Xero API occurred. Contact the Xero API team if problems persist.'
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroInternalError.")
 
         except XeroInternalError as e:
@@ -222,25 +240,27 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 500)
-            self.assertEqual(e.response.text, 'An unhandled error with the Xero API occurred. Contact the Xero API team if problems persist.')
+            self.assertEqual(e.response.data, 'An unhandled error with the Xero API occurred. Contact the Xero API team if problems persist.')
         except Exception as e:
             self.fail("Should raise a XeroInternalError, not %s" % e)
 
-    @patch('requests.post')
-    def test_not_implemented(self, r_post):
+    @patch('xero.basemanager.make_authed_request')
+    def test_not_implemented(self, make_authed_request):
         "In case of an SSL failure, a Forbidden exception is raised"
         # Verified response from the live API
-        r_post.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=501,
             encoding='utf-8',
-            text=mock_data.not_implemented_text
+            data=mock_data.not_implemented_text
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.organisations.save({})
+            self.loop.run_until_complete(
+                xero.organisations.save({})
+            )
             self.fail("Should raise a XeroNotImplemented.")
 
         except XeroNotImplemented as e:
@@ -249,24 +269,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 501)
-            self.assertTrue(e.response.text.startswith, '<ApiException')
+            self.assertTrue(e.response.data.startswith, '<ApiException')
         except Exception as e:
             self.fail("Should raise a XeroNotImplemented, not %s" % e)
 
-    @patch('requests.get')
-    def test_rate_limit_exceeded(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_rate_limit_exceeded(self, make_authed_request):
         "If you exceed the rate limit, an exception is raised."
         # Response based off Xero documentation; not confirmed by reality.
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=503,
-            text="oauth_problem=rate%20limit%20exceeded&oauth_problem_advice=please%20wait%20before%20retrying%20the%20xero%20api"
+            data="oauth_problem=rate%20limit%20exceeded&oauth_problem_advice=please%20wait%20before%20retrying%20the%20xero%20api"
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroRateLimitExceeded.")
 
         except XeroRateLimitExceeded as e:
@@ -276,24 +298,26 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 503)
-            self.assertEqual(e.response.text, "oauth_problem=rate%20limit%20exceeded&oauth_problem_advice=please%20wait%20before%20retrying%20the%20xero%20api")
+            self.assertEqual(e.response.data, "oauth_problem=rate%20limit%20exceeded&oauth_problem_advice=please%20wait%20before%20retrying%20the%20xero%20api")
         except Exception as e:
             self.fail("Should raise a XeroRateLimitExceeded, not %s" % e)
 
-    @patch('requests.get')
-    def test_not_available(self, r_get):
+    @patch('xero.basemanager.make_authed_request')
+    def test_not_available(self, make_authed_request):
         "If Xero goes down for maintenance, an exception is raised"
         # Response based off Xero documentation; not confirmed by reality.
-        r_get.return_value = Mock(
+        make_authed_request.return_value = Mock(
             status_code=503,
-            text="The Xero API is currently offline for maintenance"
+            data="The Xero API is currently offline for maintenance"
         )
 
         credentials = Mock(base_url="")
         xero = Xero(credentials)
 
         try:
-            xero.contacts.all()
+            self.loop.run_until_complete(
+                xero.contacts.all()
+            )
             self.fail("Should raise a XeroNotAvailable.")
 
         except XeroNotAvailable as e:
@@ -302,6 +326,6 @@ class ExceptionsTest(unittest.TestCase):
 
             # The response has also been stored
             self.assertEqual(e.response.status_code, 503)
-            self.assertEqual(e.response.text, "The Xero API is currently offline for maintenance")
+            self.assertEqual(e.response.data, "The Xero API is currently offline for maintenance")
         except Exception as e:
             self.fail("Should raise a XeroNotAvailable, not %s" % e)

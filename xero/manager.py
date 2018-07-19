@@ -1,7 +1,5 @@
 from __future__ import unicode_literals
 
-import requests
-
 from .constants import XERO_API_URL
 from .utils import singular
 from .basemanager import BaseManager
@@ -18,7 +16,7 @@ class Manager(BaseManager):
         self.singular = singular(name)
 
         if user_agent is None:
-            self.user_agent = 'pyxero/%s ' % VERSION + requests.utils.default_user_agent()
+            self.user_agent = 'pyxero/%s ' % VERSION
         else:
             self.user_agent = user_agent
 

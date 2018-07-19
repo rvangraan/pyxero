@@ -1,7 +1,4 @@
-from __future__ import unicode_literals
-
 import json
-import requests
 import six
 
 from datetime import datetime
@@ -14,6 +11,7 @@ from .exceptions import (
     XeroUnauthorized
 )
 from .utils import singular, isplural, json_load_object_hook
+from .aiohttp_oauth1 import make_authed_request
 
 
 class BaseManager(object):
@@ -154,8 +152,8 @@ class BaseManager(object):
         # In python3 this seems to return a bytestring
         return six.u(tostring(root_elm))
 
-    def _parse_api_response(self, response, resource_name):
-        data = json.loads(response.text, object_hook=json_load_object_hook)
+    def _parse_api_response(self, raw_data, resource_name):
+        data = json.loads(raw_data, object_hook=json_load_object_hook)
         assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data['Status']
         try:
             return data[resource_name]
@@ -167,9 +165,7 @@ class BaseManager(object):
         Each of the decorated methods must return:
             uri, params, method, body, headers, singleobject
         """
-        def wrapper(*args, **kwargs):
-            timeout = kwargs.pop('timeout', None)
-
+        async def wrapper(*args, **kwargs):
             uri, params, method, body, headers, singleobject = func(*args, **kwargs)
 
             if headers is None:
@@ -184,19 +180,19 @@ class BaseManager(object):
             # or individual user/partner
             headers['User-Agent'] = self.user_agent
 
-            response = getattr(requests, method)(
-                    uri, data=body, headers=headers, auth=self.credentials.oauth,
-                    params=params, timeout=timeout)
+            response = await make_authed_request(
+                uri, method, self.credentials.oauth, params, body, headers
+            )
 
             if response.status_code == 200:
                 # If we haven't got XML or JSON, assume we're being returned a binary file
                 if not response.headers['content-type'].startswith('application/json'):
-                    return response.content
+                    return response.data
 
-                return self._parse_api_response(response, self.name)
+                return self._parse_api_response(response.data, self.name)
 
             elif response.status_code == 204:
-                return response.content
+                return response.data
 
             elif response.status_code == 400:
                 raise XeroBadRequest(response)
@@ -221,7 +217,7 @@ class BaseManager(object):
                 # return encoded content; offline errors don't.
                 # If you parse the response text and there's nothing
                 # encoded, it must be a not-available error.
-                payload = parse_qs(response.text)
+                payload = parse_qs(response.data)
                 if payload:
                     raise XeroRateLimitExceeded(response, payload)
                 else:
