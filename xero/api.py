@@ -24,6 +24,7 @@ class Xero(object):
         "Items",
         "Journals",
         "ManualJournals",
+        "LinkedTransactions",
         "Organisations",
         "Overpayments",
         "Payments",
