@@ -96,6 +96,8 @@ class BaseManager(object):
         'ne': '!='
     }
 
+    is_json_api = False
+
     def __init__(self):
         pass
 
@@ -257,7 +259,16 @@ class BaseManager(object):
 
     def save_or_put(self, data, method='post', headers=None, summarize_errors=True):
         uri = '/'.join([self.base_url, self.name])
-        body = {'xml': self._prepare_data_for_save(data)}
+        if not self.is_json_api:
+            body = {'xml': self._prepare_data_for_save(data)}
+        else:
+            body = data
+
+            if headers is None:
+                headers = {}
+
+            headers['content-type'] = 'application/json'
+
         params = self.extra_params.copy()
         if not summarize_errors:
             params['summarizeErrors'] = 'false'
