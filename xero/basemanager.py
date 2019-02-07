@@ -198,6 +198,9 @@ class BaseManager(object):
 
                 return self._parse_api_response(response.data, self.name)
 
+            elif response.status_code == 202:
+                return self._parse_api_response(response.data, self.name)
+
             elif response.status_code == 204:
                 return response.data
 
@@ -267,7 +270,7 @@ class BaseManager(object):
         if not self.is_json_api:
             body = {'xml': self._prepare_data_for_save(data)}
         else:
-            body = data
+            body = json.dumps(data)
 
             if headers is None:
                 headers = {}
