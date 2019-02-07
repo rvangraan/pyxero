@@ -25,6 +25,7 @@ class BaseManager(object):
         'get_attachments',
         'get_attachment_data',
         'put_attachment_data',
+        'delete_requests'
     )
     DATETIME_FIELDS = (
         'UpdatedDateUTC',
@@ -287,6 +288,12 @@ class BaseManager(object):
     def _delete(self, id):
         uri = '/'.join([self.base_url, self.name, id])
         return uri, {}, 'delete', None, None, False
+
+    def _delete_requests(self, data):
+        uri, params, method, body, headers, singleobject = self.save_or_put(data, method='post')
+
+        uri += '/DeleteRequests'
+        return uri, params, method, body, headers, singleobject
 
     def _put_attachment_data(self, id, filename, data, content_type, include_online=False):
         """Upload an attachment to the Xero object."""
