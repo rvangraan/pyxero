@@ -25,8 +25,7 @@ class XeroBadRequest(XeroException):
                 self.errors = []
 
                 for item in data['items']:
-                    err_msg = \
-                        'BankFeedCreation for BankAccount %s was %s.' % (item['accountToken'], item['status'])
+                    err_msg = ''
 
                     if 'error' in item:
                         error = item['error']
