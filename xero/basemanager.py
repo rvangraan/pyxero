@@ -25,6 +25,7 @@ class BaseManager(object):
         'get_attachments',
         'get_attachment_data',
         'put_attachment_data',
+        'delete_requests'
     )
     DATETIME_FIELDS = (
         'UpdatedDateUTC',
@@ -96,6 +97,8 @@ class BaseManager(object):
         'ne': '!='
     }
 
+    is_json_api = False
+
     def __init__(self):
         pass
 
@@ -154,11 +157,15 @@ class BaseManager(object):
 
     def _parse_api_response(self, raw_data, resource_name):
         data = json.loads(raw_data, object_hook=json_load_object_hook)
-        assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data['Status']
-        try:
-            return data[resource_name]
-        except KeyError:
+        if resource_name == 'FeedConnections':
             return data
+        else:
+            assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data[
+                'Status']
+            try:
+                return data[resource_name]
+            except KeyError:
+                return data
 
     def _get_data(self, func):
         """ This is the decorator for our DECORATED_METHODS.
@@ -189,6 +196,9 @@ class BaseManager(object):
                 if not response.headers['content-type'].startswith('application/json'):
                     return response.data
 
+                return self._parse_api_response(response.data, self.name)
+
+            elif response.status_code == 202:
                 return self._parse_api_response(response.data, self.name)
 
             elif response.status_code == 204:
@@ -257,7 +267,16 @@ class BaseManager(object):
 
     def save_or_put(self, data, method='post', headers=None, summarize_errors=True):
         uri = '/'.join([self.base_url, self.name])
-        body = {'xml': self._prepare_data_for_save(data)}
+        if not self.is_json_api:
+            body = {'xml': self._prepare_data_for_save(data)}
+        else:
+            body = json.dumps(data)
+
+            if headers is None:
+                headers = {}
+
+            headers['content-type'] = 'application/json'
+
         params = self.extra_params.copy()
         if not summarize_errors:
             params['summarizeErrors'] = 'false'
@@ -272,6 +291,12 @@ class BaseManager(object):
     def _delete(self, id):
         uri = '/'.join([self.base_url, self.name, id])
         return uri, {}, 'delete', None, None, False
+
+    def _delete_requests(self, data):
+        uri, params, method, body, headers, singleobject = self.save_or_put(data, method='post')
+
+        uri += '/DeleteRequests'
+        return uri, params, method, body, headers, singleobject
 
     def _put_attachment_data(self, id, filename, data, content_type, include_online=False):
         """Upload an attachment to the Xero object."""

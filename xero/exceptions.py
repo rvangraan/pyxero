@@ -20,21 +20,46 @@ class XeroBadRequest(XeroException):
     def __init__(self, response):
         if response.headers['content-type'].startswith('application/json'):
             data = json.loads(response.data)
-            msg = "%s: %s" % (data['Type'], data['Message'])
-            self.errors = [err['Message']
-                for elem in data.get('Elements', [])
-                for err in elem.get('ValidationErrors', [])
-            ]
-            if len(self.errors) > 0:
-                self.problem = self.errors[0]
+            if 'items' in response.data:
+                # bankfeed creation api error
+                self.errors = []
+
+                for item in data['items']:
+                    err_msg = ''
+
+                    if 'error' in item:
+                        error = item['error']
+                        err_msg += ' %s: %s' % (error['type'], error['detail'])
+
+                    self.errors.append(err_msg)
+
+                msg = self.problem = self.errors[0]
+
                 if len(self.errors) > 1:
-                    msg += ' (%s, and %s other issues)' % (
-                            self.problem, len(self.errors))
-                else:
-                    msg += ' (%s)' % self.problem
+                    msg += ' (%s, and %s other issues)' % (self.problem, len(self.errors))
+
+                super(XeroBadRequest, self).__init__(response, msg=msg)
+            elif 'detail' in response.data:
+                msg = self.problem = '%s: %s' % (response.data['type'], response.data['detail'])
+
+                super(XeroBadRequest, self).__init__(response, msg=msg)
+
             else:
-                self.problem = None
-            super(XeroBadRequest, self).__init__(response, msg=msg)
+                msg = "%s: %s" % (data['Type'], data['Message'])
+                self.errors = [err['Message']
+                    for elem in data.get('Elements', [])
+                    for err in elem.get('ValidationErrors', [])
+                ]
+                if len(self.errors) > 0:
+                    self.problem = self.errors[0]
+                    if len(self.errors) > 1:
+                        msg += ' (%s, and %s other issues)' % (
+                                self.problem, len(self.errors))
+                    else:
+                        msg += ' (%s)' % self.problem
+                else:
+                    self.problem = None
+                super(XeroBadRequest, self).__init__(response, msg=msg)
 
         elif response.headers['content-type'].startswith('text/html'):
             payload = parse_qs(response.data)
