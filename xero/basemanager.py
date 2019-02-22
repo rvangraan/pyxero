@@ -157,7 +157,7 @@ class BaseManager(object):
 
     def _parse_api_response(self, raw_data, resource_name):
         data = json.loads(raw_data, object_hook=json_load_object_hook)
-        if resource_name == 'FeedConnections':
+        if resource_name in ['FeedConnections', 'Statements']:
             return data
         else:
             assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data[
