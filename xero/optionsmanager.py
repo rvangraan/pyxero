@@ -14,6 +14,7 @@ class OptionsManager(BaseManager):
         self.singular = 'Option'
         self.name = 'Options'
         self.base_url = credentials.base_url + XERO_API_URL
+        self.extra_params = {}
         if user_agent is None:
             self.user_agent = 'pyxero/%s ' % VERSION + requests.utils.default_user_agent()
 
