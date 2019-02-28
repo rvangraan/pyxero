@@ -50,7 +50,6 @@ class Xero(object):
                                                 user_agent))
 
         setattr(self, "filesAPI", Files(credentials))
-        setattr(self, "prepaymentallocations", PrepaymentAllocationsManager(credentials))
         setattr(self, "trackingcategoryoptions", OptionsManager(credentials))
         setattr(self, "payrollAPI", Payroll(credentials, unit_price_4dps,
                                             user_agent))
