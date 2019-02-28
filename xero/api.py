@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 from .filesmanager import FilesManager
+from .optionsmanager import OptionsManager
 from .payrollmanager import PayrollManager
 from .manager import Manager
 from .bankfeeds import BankFeedManager
@@ -49,6 +50,8 @@ class Xero(object):
                                                 user_agent))
 
         setattr(self, "filesAPI", Files(credentials))
+        setattr(self, "prepaymentallocations", PrepaymentAllocationsManager(credentials))
+        setattr(self, "trackingcategoryoptions", OptionsManager(credentials))
         setattr(self, "payrollAPI", Payroll(credentials, unit_price_4dps,
                                             user_agent))
         setattr(self, 'bankFeedAPI', BankFeed(credentials, unit_price_4dps,
