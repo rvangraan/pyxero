@@ -20,7 +20,7 @@ class XeroBadRequest(XeroException):
     def __init__(self, response):
         if response.headers['content-type'].startswith('application/json'):
             data = json.loads(response.data)
-            if 'items' in response.data:
+            if 'items' in data:
                 # bankfeed creation api error
                 self.errors = []
 
@@ -39,8 +39,8 @@ class XeroBadRequest(XeroException):
                     msg += ' (%s, and %s other issues)' % (self.problem, len(self.errors))
 
                 super(XeroBadRequest, self).__init__(response, msg=msg)
-            elif 'detail' in response.data:
-                msg = self.problem = '%s: %s' % (response.data['type'], response.data['detail'])
+            elif 'detail' in data:
+                msg = self.problem = '%s: %s' % (data['type'], data['detail'])
 
                 super(XeroBadRequest, self).__init__(response, msg=msg)
 
