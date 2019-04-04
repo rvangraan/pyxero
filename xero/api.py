@@ -15,6 +15,7 @@ class Xero(object):
         "Accounts",
         "BankTransactions",
         "BankTransfers",
+        "BatchPayments",
         "BrandingThemes",
         "ContactGroups",
         "Contacts",
