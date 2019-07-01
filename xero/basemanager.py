@@ -13,6 +13,9 @@ from .exceptions import (
 from .utils import singular, isplural, json_load_object_hook
 from .aiohttp_oauth1 import make_authed_request
 
+from os import environ
+import aiotask_context as context
+
 
 class BaseManager(object):
     DECORATED_METHODS = (
@@ -182,6 +185,9 @@ class BaseManager(object):
             # so don't force the Accept header.
             if 'Accept' not in headers:
                 headers['Accept'] = 'application/json'
+
+            if environ.get('TESTING'):
+                headers['X-Customer-Role-Uid'] = context.get('customer_role_uid')
 
             # Set a user-agent so Xero knows the traffic is coming from pyxero
             # or individual user/partner

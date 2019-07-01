@@ -353,6 +353,7 @@ class PartnerCredentials(PublicCredentials):
                  oauth_token=None, oauth_token_secret=None,
                  oauth_expires_at=None, oauth_authorization_expires_at=None,
                  oauth_session_handle=None, scope=None, user_agent=None,
+                 base_url=None,
                  **kwargs):
         """Construct the auth instance.
 
@@ -376,7 +377,7 @@ class PartnerCredentials(PublicCredentials):
             self.user_agent = user_agent
 
         self._signature_method = SIGNATURE_RSA
-        self.base_url = XERO_BASE_URL
+        self.base_url = base_url or XERO_BASE_URL
 
         self.rsa_key = rsa_key
         self.oauth_session_handle = oauth_session_handle
