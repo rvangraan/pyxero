@@ -16,7 +16,6 @@ from .aiohttp_oauth1 import make_authed_request
 from os import environ
 import aiotask_context as context
 
-
 class BaseManager(object):
     DECORATED_METHODS = (
         'get',
@@ -245,7 +244,10 @@ class BaseManager(object):
         return wrapper
 
     def _get(self, id, headers=None, params=None):
-        uri = '/'.join([self.base_url, self.name, id])
+        if id is None:
+            uri = '/'.join([self.base_url, self.name])
+        else:
+            uri = '/'.join([self.base_url, self.name, id])
         uri_params = self.extra_params.copy()
         uri_params.update(params if params else {})
         return uri, uri_params, 'get', None, headers, True
@@ -293,8 +295,8 @@ class BaseManager(object):
             params['summarizeErrors'] = 'false'
         return uri, params, method, body, headers, False
 
-    def _save(self, data):
-        return self.save_or_put(data, method='post')
+    def _save(self, data, summarize_errors=True):
+        return self.save_or_put(data, method='post', summarize_errors=summarize_errors)
 
     def _put(self, data, summarize_errors=True):
         return self.save_or_put(data, method='put', summarize_errors=summarize_errors)
