@@ -1,12 +1,11 @@
 from __future__ import unicode_literals
 
 import datetime
-import requests
 
 from oauthlib.oauth1 import (
     SIGNATURE_RSA, SIGNATURE_TYPE_AUTH_HEADER, SIGNATURE_HMAC
 )
-from requests_oauthlib import OAuth1
+from .aiohttp_oauth1 import OAuth1, make_authed_request
 from six.moves.urllib.parse import urlencode, parse_qs
 
 from .constants import (
@@ -19,7 +18,8 @@ from .exceptions import (
 )
 
 
-OAUTH_EXPIRY_SECONDS = 3600 # Default unless a response reports differently
+OAUTH_EXPIRY_SECONDS = 3600  # Default unless a response reports differently
+
 
 class PrivateCredentials(object):
     """An object wrapping the 2-step OAuth process for Private Xero API access.
@@ -117,7 +117,7 @@ class PublicCredentials(object):
         self.scope = scope
 
         if user_agent is None:
-            self.user_agent = 'pyxero/%s ' % VERSION + requests.utils.default_user_agent()
+            self.user_agent = 'pyxero/%s ' % VERSION
         else:
             self.user_agent = user_agent
 
@@ -129,10 +129,14 @@ class PublicCredentials(object):
         self.rsa_key = None
         self.oauth_session_handle = None
 
-        self._init_credentials(oauth_token, oauth_token_secret)
+        self.oauth_token = oauth_token
+        self.oauth_token_secret = oauth_token_secret
 
-    def _init_credentials(self, oauth_token, oauth_token_secret):
+    async def _init_credentials(self):
         "Depending on the state passed in, get self._oauth up and running"
+        oauth_token = self.oauth_token
+        oauth_token_secret = self.oauth_token_secret
+
         if oauth_token and oauth_token_secret:
             if self.verified:
                 # If provided, this is a fully verified set of
@@ -159,7 +163,11 @@ class PublicCredentials(object):
 
             url = self.base_url + REQUEST_TOKEN_URL
             headers = {'User-Agent': self.user_agent}
-            response = requests.post(url=url, headers=headers, auth=oauth)
+            response = await make_authed_request(
+                method='post', url=url,
+                headers=headers,
+                oauth_client=oauth
+            )
             self._process_oauth_response(response)
 
     def _init_oauth(self, oauth_token, oauth_token_secret):
@@ -179,7 +187,7 @@ class PublicCredentials(object):
     def _process_oauth_response(self, response):
         "Extracts the fields from an oauth response"
         if response.status_code == 200:
-            credentials = parse_qs(response.text)
+            credentials = parse_qs(response.data)
 
             # Initialize the oauth credentials
             self._init_oauth(
@@ -233,7 +241,7 @@ class PublicCredentials(object):
             # return encoded content; offline errors don't.
             # If you parse the response text and there's nothing
             # encoded, it must be a not-available error.
-            payload = parse_qs(response.text)
+            payload = parse_qs(response.data)
             if payload:
                 raise XeroRateLimitExceeded(response, payload)
             else:
@@ -257,7 +265,7 @@ class PublicCredentials(object):
             if getattr(self, attr) is not None
         )
 
-    def verify(self, verifier):
+    async def verify(self, verifier):
         "Verify an OAuth token"
 
         # Construct the credentials for the verification request
@@ -274,7 +282,9 @@ class PublicCredentials(object):
         # Make the verification request, gettiung back an access token
         url = self.base_url + ACCESS_TOKEN_URL
         headers = {'User-Agent': self.user_agent}
-        response = requests.post(url=url, headers=headers, auth=oauth)
+        response = await make_authed_request(
+            method='post', url=url, headers=headers, oauth_client=oauth
+        )
         self._process_oauth_response(response)
         self.verified = True
 
@@ -315,6 +325,7 @@ class PublicCredentials(object):
         return self.oauth_expires_at <= \
                (now + datetime.timedelta(seconds=CONSERVATIVE_SECONDS))
 
+
 class PartnerCredentials(PublicCredentials):
     """An object wrapping the 3-step OAuth process for Partner Xero API access.
 
@@ -342,6 +353,7 @@ class PartnerCredentials(PublicCredentials):
                  oauth_token=None, oauth_token_secret=None,
                  oauth_expires_at=None, oauth_authorization_expires_at=None,
                  oauth_session_handle=None, scope=None, user_agent=None,
+                 base_url=None,
                  **kwargs):
         """Construct the auth instance.
 
@@ -360,19 +372,20 @@ class PartnerCredentials(PublicCredentials):
         self.oauth_authorization_expires_at = oauth_authorization_expires_at
         self.scope = scope
         if user_agent is None:
-            self.user_agent = 'pyxero/%s ' % VERSION + requests.utils.default_user_agent()
+            self.user_agent = 'pyxero/%s ' % VERSION
         else:
             self.user_agent = user_agent
 
         self._signature_method = SIGNATURE_RSA
-        self.base_url = XERO_BASE_URL
+        self.base_url = base_url or XERO_BASE_URL
 
         self.rsa_key = rsa_key
         self.oauth_session_handle = oauth_session_handle
 
-        self._init_credentials(oauth_token, oauth_token_secret)
+        self.oauth_token = oauth_token
+        self.oauth_token_secret = oauth_token_secret
 
-    def refresh(self):
+    async def refresh(self):
         "Refresh an expired token"
 
         # Construct the credentials for the verification request
@@ -388,6 +401,25 @@ class PartnerCredentials(PublicCredentials):
         # Make the verification request, getting back an access token
         headers = {'User-Agent': self.user_agent}
         params = {'oauth_session_handle': self.oauth_session_handle}
-        response = requests.post(url=self.base_url + ACCESS_TOKEN_URL,
-                params=params, headers=headers, auth=oauth)
+        response = await make_authed_request(
+            method='post', url=self.base_url + ACCESS_TOKEN_URL,
+            params=params, headers=headers,
+            oauth_client=oauth
+        )
         self._process_oauth_response(response)
+
+
+async def make_partner_credentials(*args, **kwargs) -> PartnerCredentials:
+    partner_credentials = PartnerCredentials(*args, **kwargs)
+
+    await partner_credentials._init_credentials()
+
+    return partner_credentials
+
+
+async def make_public_credentials(*args, **kwargs) -> PublicCredentials:
+    public_credentials = PublicCredentials(*args, **kwargs)
+
+    await public_credentials._init_credentials()
+
+    return public_credentials

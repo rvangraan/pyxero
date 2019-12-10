@@ -1,8 +1,10 @@
 from __future__ import unicode_literals
 
 from .filesmanager import FilesManager
+from .optionsmanager import OptionsManager
 from .payrollmanager import PayrollManager
 from .manager import Manager
+from .bankfeeds import BankFeedManager
 
 
 class Xero(object):
@@ -13,6 +15,7 @@ class Xero(object):
         "Accounts",
         "BankTransactions",
         "BankTransfers",
+        "BatchPayments",
         "BrandingThemes",
         "ContactGroups",
         "Contacts",
@@ -24,6 +27,7 @@ class Xero(object):
         "Items",
         "Journals",
         "ManualJournals",
+        "LinkedTransactions",
         "Organisations",
         "Overpayments",
         "Payments",
@@ -47,8 +51,11 @@ class Xero(object):
                                                 user_agent))
 
         setattr(self, "filesAPI", Files(credentials))
+        setattr(self, "trackingcategoryoptions", OptionsManager(credentials))
         setattr(self, "payrollAPI", Payroll(credentials, unit_price_4dps,
                                             user_agent))
+        setattr(self, 'bankFeedAPI', BankFeed(credentials, unit_price_4dps,
+                                              user_agent))
 
 
 class Files(object):
@@ -87,3 +94,17 @@ class Payroll(object):
         for name in self.OBJECT_LIST:
             setattr(self, name.lower(), PayrollManager(name, credentials, unit_price_4dps,
                                                        user_agent))
+
+
+class BankFeed:
+    """An ORM-like interface to the Xero BankFeed API"""
+
+    OBJECT_LIST = (
+        "FeedConnections",
+        "Statements"
+    )
+
+    def __init__(self, credentials, unit_price_4dps=False, user_agent=None):
+        for name in self.OBJECT_LIST:
+            setattr(self, name.lower(), BankFeedManager(name, credentials, unit_price_4dps,
+                                                        user_agent))

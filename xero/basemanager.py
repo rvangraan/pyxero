@@ -1,7 +1,4 @@
-from __future__ import unicode_literals
-
 import json
-import requests
 import six
 
 from datetime import datetime
@@ -14,7 +11,10 @@ from .exceptions import (
     XeroUnauthorized
 )
 from .utils import singular, isplural, json_load_object_hook
+from .aiohttp_oauth1 import make_authed_request
 
+from os import environ
+import aiotask_context as context
 
 class BaseManager(object):
     DECORATED_METHODS = (
@@ -24,9 +24,11 @@ class BaseManager(object):
         'all',
         'put',
         'delete',
+        'get_history',
         'get_attachments',
         'get_attachment_data',
         'put_attachment_data',
+        'delete_requests'
     )
     DATETIME_FIELDS = (
         'UpdatedDateUTC',
@@ -98,6 +100,8 @@ class BaseManager(object):
         'ne': '!='
     }
 
+    is_json_api = False
+
     def __init__(self):
         pass
 
@@ -154,22 +158,24 @@ class BaseManager(object):
         # In python3 this seems to return a bytestring
         return six.u(tostring(root_elm))
 
-    def _parse_api_response(self, response, resource_name):
-        data = json.loads(response.text, object_hook=json_load_object_hook)
-        assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data['Status']
-        try:
-            return data[resource_name]
-        except KeyError:
+    def _parse_api_response(self, raw_data, resource_name):
+        data = json.loads(raw_data, object_hook=json_load_object_hook)
+        if resource_name in ['FeedConnections', 'Statements']:
             return data
+        else:
+            assert data['Status'] == 'OK', "Expected the API to say OK but received %s" % data[
+                'Status']
+            try:
+                return data[resource_name]
+            except KeyError:
+                return data
 
     def _get_data(self, func):
         """ This is the decorator for our DECORATED_METHODS.
         Each of the decorated methods must return:
             uri, params, method, body, headers, singleobject
         """
-        def wrapper(*args, **kwargs):
-            timeout = kwargs.pop('timeout', None)
-
+        async def wrapper(*args, **kwargs):
             uri, params, method, body, headers, singleobject = func(*args, **kwargs)
 
             if headers is None:
@@ -180,23 +186,29 @@ class BaseManager(object):
             if 'Accept' not in headers:
                 headers['Accept'] = 'application/json'
 
+            if environ.get('TESTING'):
+                headers['X-Sync-Uid'] = context.get('sync_uid')
+
             # Set a user-agent so Xero knows the traffic is coming from pyxero
             # or individual user/partner
             headers['User-Agent'] = self.user_agent
 
-            response = getattr(requests, method)(
-                    uri, data=body, headers=headers, auth=self.credentials.oauth,
-                    params=params, timeout=timeout)
+            response = await make_authed_request(
+                uri, method, self.credentials.oauth, params, body, headers
+            )
 
             if response.status_code == 200:
                 # If we haven't got XML or JSON, assume we're being returned a binary file
                 if not response.headers['content-type'].startswith('application/json'):
-                    return response.content
+                    return response.data
 
-                return self._parse_api_response(response, self.name)
+                return self._parse_api_response(response.data, self.name)
+
+            elif response.status_code == 202:
+                return self._parse_api_response(response.data, self.name)
 
             elif response.status_code == 204:
-                return response.content
+                return response.data
 
             elif response.status_code == 400:
                 raise XeroBadRequest(response)
@@ -221,7 +233,7 @@ class BaseManager(object):
                 # return encoded content; offline errors don't.
                 # If you parse the response text and there's nothing
                 # encoded, it must be a not-available error.
-                payload = parse_qs(response.text)
+                payload = parse_qs(response.data)
                 if payload:
                     raise XeroRateLimitExceeded(response, payload)
                 else:
@@ -232,10 +244,17 @@ class BaseManager(object):
         return wrapper
 
     def _get(self, id, headers=None, params=None):
-        uri = '/'.join([self.base_url, self.name, id])
+        if id is None:
+            uri = '/'.join([self.base_url, self.name])
+        else:
+            uri = '/'.join([self.base_url, self.name, id])
         uri_params = self.extra_params.copy()
         uri_params.update(params if params else {})
         return uri, uri_params, 'get', None, headers, True
+
+    def _get_history(self, id):
+        uri = '/'.join([self.base_url, self.name, id, 'history']) + '/'
+        return uri, {}, 'get', None, None, False
 
     def _get_attachments(self, id):
         """Retrieve a list of attachments associated with this Xero object."""
@@ -261,14 +280,23 @@ class BaseManager(object):
 
     def save_or_put(self, data, method='post', headers=None, summarize_errors=True):
         uri = '/'.join([self.base_url, self.name])
-        body = {'xml': self._prepare_data_for_save(data)}
+        if not self.is_json_api:
+            body = {'xml': self._prepare_data_for_save(data)}
+        else:
+            body = json.dumps(data)
+
+            if headers is None:
+                headers = {}
+
+            headers['content-type'] = 'application/json'
+
         params = self.extra_params.copy()
         if not summarize_errors:
             params['summarizeErrors'] = 'false'
         return uri, params, method, body, headers, False
 
-    def _save(self, data):
-        return self.save_or_put(data, method='post')
+    def _save(self, data, summarize_errors=True):
+        return self.save_or_put(data, method='post', summarize_errors=summarize_errors)
 
     def _put(self, data, summarize_errors=True):
         return self.save_or_put(data, method='put', summarize_errors=summarize_errors)
@@ -276,6 +304,12 @@ class BaseManager(object):
     def _delete(self, id):
         uri = '/'.join([self.base_url, self.name, id])
         return uri, {}, 'delete', None, None, False
+
+    def _delete_requests(self, data):
+        uri, params, method, body, headers, singleobject = self.save_or_put(data, method='post')
+
+        uri += '/DeleteRequests'
+        return uri, params, method, body, headers, singleobject
 
     def _put_attachment_data(self, id, filename, data, content_type, include_online=False):
         """Upload an attachment to the Xero object."""
@@ -344,7 +378,7 @@ class BaseManager(object):
                 )
 
             # Move any known parameter names to the query string
-            KNOWN_PARAMETERS = ['order', 'offset', 'page', 'includeArchived']
+            KNOWN_PARAMETERS = ['order', 'offset', 'page', 'includeArchived', 'pageSize']
             for param in KNOWN_PARAMETERS:
                 if param in kwargs:
                     params[param] = kwargs.pop(param)

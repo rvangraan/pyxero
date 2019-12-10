@@ -19,25 +19,50 @@ class XeroBadRequest(XeroException):
     # HTTP 400: Bad Request
     def __init__(self, response):
         if response.headers['content-type'].startswith('application/json'):
-            data = json.loads(response.text)
-            msg = "%s: %s" % (data['Type'], data['Message'])
-            self.errors = [err['Message']
-                for elem in data.get('Elements', [])
-                for err in elem.get('ValidationErrors', [])
-            ]
-            if len(self.errors) > 0:
-                self.problem = self.errors[0]
+            data = json.loads(response.data)
+            if 'items' in data:
+                # bankfeed creation api error
+                self.errors = []
+
+                for item in data['items']:
+                    err_msg = ''
+
+                    if 'error' in item:
+                        error = item['error']
+                        err_msg += ' %s: %s' % (error['type'], error['detail'])
+
+                    self.errors.append(err_msg)
+
+                msg = self.problem = self.errors[0]
+
                 if len(self.errors) > 1:
-                    msg += ' (%s, and %s other issues)' % (
-                            self.problem, len(self.errors))
-                else:
-                    msg += ' (%s)' % self.problem
+                    msg += ' (%s, and %s other issues)' % (self.problem, len(self.errors))
+
+                super(XeroBadRequest, self).__init__(response, msg=msg)
+            elif 'detail' in data:
+                msg = self.problem = '%s: %s' % (data['type'], data['detail'])
+
+                super(XeroBadRequest, self).__init__(response, msg=msg)
+
             else:
-                self.problem = None
-            super(XeroBadRequest, self).__init__(response, msg=msg)
+                msg = "%s: %s" % (data['Type'], data['Message'])
+                self.errors = [err['Message']
+                    for elem in data.get('Elements', [])
+                    for err in elem.get('ValidationErrors', [])
+                ]
+                if len(self.errors) > 0:
+                    self.problem = self.errors[0]
+                    if len(self.errors) > 1:
+                        msg += ' (%s, and %s other issues)' % (
+                                self.problem, len(self.errors))
+                    else:
+                        msg += ' (%s)' % self.problem
+                else:
+                    self.problem = None
+                super(XeroBadRequest, self).__init__(response, msg=msg)
 
         elif response.headers['content-type'].startswith('text/html'):
-            payload = parse_qs(response.text)
+            payload = parse_qs(response.data)
             self.errors = [payload['oauth_problem'][0]]
             self.problem = self.errors[0]
             super(XeroBadRequest, self).__init__(response, payload['oauth_problem_advice'][0])
@@ -45,7 +70,7 @@ class XeroBadRequest(XeroException):
         else:
             # Extract the messages from the text.
             # parseString takes byte content, not unicode.
-            dom = parseString(response.text.encode(response.encoding))
+            dom = parseString(response.data.encode(response.encoding))
             messages = dom.getElementsByTagName('Message')
 
             msg = messages[0].childNodes[0].data
@@ -59,7 +84,7 @@ class XeroBadRequest(XeroException):
 class XeroUnauthorized(XeroException):
     # HTTP 401: Unauthorized
     def __init__(self, response):
-        payload = parse_qs(response.text)
+        payload = parse_qs(response.data)
         self.errors = [payload['oauth_problem'][0]]
         self.problem = self.errors[0]
         super(XeroUnauthorized, self).__init__(response, payload['oauth_problem_advice'][0])
@@ -68,23 +93,23 @@ class XeroUnauthorized(XeroException):
 class XeroForbidden(XeroException):
     # HTTP 403: Forbidden
     def __init__(self, response):
-        super(XeroForbidden, self).__init__(response, response.text)
+        super(XeroForbidden, self).__init__(response, response.data)
 
 
 class XeroNotFound(XeroException):
     # HTTP 404: Not Found
     def __init__(self, response):
-        super(XeroNotFound, self).__init__(response, response.text)
+        super(XeroNotFound, self).__init__(response, response.data)
 
 class XeroUnsupportedMediaType(XeroException):
     # HTTP 415: UnsupportedMediaType
     def __init__(self, response):
-        super(XeroUnsupportedMediaType, self).__init__(response, response.text)
+        super(XeroUnsupportedMediaType, self).__init__(response, response.data)
 
 class XeroInternalError(XeroException):
     # HTTP 500: Internal Error
     def __init__(self, response):
-        super(XeroInternalError, self).__init__(response, response.text)
+        super(XeroInternalError, self).__init__(response, response.data)
 
 
 class XeroNotImplemented(XeroException):
@@ -92,7 +117,7 @@ class XeroNotImplemented(XeroException):
     def __init__(self, response):
         # Extract the useful error message from the text.
         # parseString takes byte content, not unicode.
-        dom = parseString(response.text.encode(response.encoding))
+        dom = parseString(response.data.encode(response.encoding))
         messages = dom.getElementsByTagName('Message')
 
         msg = messages[0].childNodes[0].data
@@ -105,7 +130,7 @@ class XeroRateLimitExceeded(XeroException):
         try:
             self.errors = [payload['oauth_problem'][0]]
         except KeyError:
-            return super(XeroRateLimitExceeded, self).__init__(response, response.text)
+            raise super(XeroRateLimitExceeded, self).__init__(response, response.data)
         self.problem = self.errors[0]
         super(XeroRateLimitExceeded, self).__init__(response, payload['oauth_problem_advice'][0])
 
@@ -113,7 +138,7 @@ class XeroRateLimitExceeded(XeroException):
 class XeroNotAvailable(XeroException):
     # HTTP 503 - Not available
     def __init__(self, response):
-        super(XeroNotAvailable, self).__init__(response, response.text)
+        super(XeroNotAvailable, self).__init__(response, response.data)
 
 
 class XeroExceptionUnknown(XeroException):

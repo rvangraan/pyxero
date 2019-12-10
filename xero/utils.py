@@ -19,6 +19,7 @@ OBJECT_NAMES = {
     "Accounts": "Account",
     "BankTransactions": "BankTransaction",
     "BankTransfers": "BankTransfer",
+    "BatchPayments": "BatchPayment",
     "BrandingThemes": "BrandingTheme",
     "ContactGroups": "ContactGroup",
     "ContactPersons": "ContactPerson",
@@ -53,6 +54,7 @@ OBJECT_NAMES = {
     "LineItems": "LineItem",
     "JournalLines": "JournalLine",
     "PurchaseOrders": "PurchaseOrder",
+    "LinkedTransactions": "LinkedTransaction"
 }
 
 def isplural(word):
