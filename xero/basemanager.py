@@ -187,7 +187,7 @@ class BaseManager(object):
                 headers['Accept'] = 'application/json'
 
             if environ.get('TESTING'):
-                headers['X-Customer-Role-Uid'] = context.get('customer_role_uid')
+                headers['X-Sync-Uid'] = context.get('sync_uid')
 
             # Set a user-agent so Xero knows the traffic is coming from pyxero
             # or individual user/partner
