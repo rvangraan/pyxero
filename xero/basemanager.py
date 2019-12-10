@@ -188,6 +188,7 @@ class BaseManager(object):
 
             if environ.get('TESTING'):
                 headers['X-Sync-Uid'] = context.get('sync_uid')
+                headers['X-Trace-Token'] = context.get('X-Trace-Token')
 
             # Set a user-agent so Xero knows the traffic is coming from pyxero
             # or individual user/partner
