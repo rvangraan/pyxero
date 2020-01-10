@@ -25,6 +25,7 @@ class BaseManager(object):
         'put',
         'delete',
         'get_history',
+        'put_history',
         'get_attachments',
         'get_attachment_data',
         'put_attachment_data',
@@ -256,6 +257,19 @@ class BaseManager(object):
     def _get_history(self, id):
         uri = '/'.join([self.base_url, self.name, id, 'history']) + '/'
         return uri, {}, 'get', None, None, False
+
+    def _put_history_data(self, id, details):
+        """Add a history note to the Xero object."""
+        uri = '/'.join([self.base_url, self.name, id, 'history'])
+        details_data = {'Details': details}
+        root_elm = Element('HistoryRecord')
+        self.dict_to_xml(root_elm, details_data)
+        data = six.u(tostring(root_elm))
+        return uri, {}, 'put', data, None, False
+
+    def put_history(self, id, details):
+        """Upload a history note to the Xero object."""
+        return self.put_history_data(id, details)
 
     def _get_attachments(self, id):
         """Retrieve a list of attachments associated with this Xero object."""
