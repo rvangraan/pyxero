@@ -267,9 +267,9 @@ class BaseManager(object):
         data = six.u(tostring(root_elm))
         return uri, {}, 'put', data, None, False
 
-    def put_history(self, id, details):
+    def _put_history(self, id, details):
         """Upload a history note to the Xero object."""
-        return self.put_history_data(id, details)
+        return self._put_history_data(id, details)
 
     def _get_attachments(self, id):
         """Retrieve a list of attachments associated with this Xero object."""
